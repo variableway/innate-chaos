@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: hypertrace-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hypertrace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hypertrace_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-hypertrace}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hypertrace}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hypertrace-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hypertrace-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-hypertrace}:${POSTGRES_PASSWORD:-hypertrace_secret}@db:5432/${POSTGRES_DB:-hypertrace}
+      - HYPERLIQUID_API_URL=${HYPERLIQUID_API_URL:-https://api.hyperliquid.xyz}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - FETCH_INTERVAL_MINUTES=${FETCH_INTERVAL_MINUTES:-5}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - hypertrace-network
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hypertrace-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}/api/v1
+      - NEXT_PUBLIC_APP_NAME=HyperTrace
+      - NEXT_PUBLIC_REFRESH_INTERVAL=300000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - hypertrace-network
+    command: npm run dev
+
+volumes:
+  timescale_data:
+    driver: local
+
+networks:
+  hypertrace-network:
+    driver: bridge
