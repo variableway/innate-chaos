@@ -1,0 +1,3 @@
+[submodule "HyperLiquid-Agent"]
+	path = HyperLiquid-Agent
+	url = https://github.com/dhananjaypai08/HyperLiquid-Agent.git
