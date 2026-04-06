@@ -1,3 +1,9 @@
 [submodule "HyperLiquid-Agent"]
 	path = HyperLiquid-Agent
 	url = https://github.com/dhananjaypai08/HyperLiquid-Agent.git
+[submodule "references/hyber-arbitrage"]
+	path = references/hyber-arbitrage
+	url = https://github.com/Jackhuang166/hyberliquid-arbitrage-bot.git
+[submodule "references/nofx"]
+	path = references/nofx
+	url = https://github.com/NoFxAiOS/nofx.git
