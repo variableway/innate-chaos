@@ -7,3 +7,6 @@
 [submodule "references/nofx"]
 	path = references/nofx
 	url = https://github.com/NoFxAiOS/nofx.git
+[submodule "references/ai-trading-agent"]
+	path = references/ai-trading-agent
+	url = https://github.com/Gajesh2007/ai-trading-agent.git
