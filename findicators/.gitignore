@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Frontend
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# uv
+uv.lock
+
+# Docker
+timescale_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Logs
+*.log
