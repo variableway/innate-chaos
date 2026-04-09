@@ -26,6 +26,10 @@ class PriceService:
                 logger.error("adapter_fetch_error", adapter=adapter.__class__.__name__, error=str(exc))
                 continue
 
+            if not data_points:
+                logger.info("adapter_no_data", adapter=adapter.__class__.__name__)
+                continue
+
             for point in data_points:
                 try:
                     asset = point["asset"]
@@ -42,7 +46,6 @@ class PriceService:
                     existing = (await self.db.execute(stmt)).scalar_one_or_none()
 
                     if existing is not None:
-                        # Update in place rather than duplicate
                         existing.price = price
                         existing.source = source
                         existing.change_24h = change_24h
@@ -68,9 +71,50 @@ class PriceService:
                 logger.error("price_commit_error", error=str(exc))
                 await self.db.rollback()
 
+    async def store_history(self, data_points: list[dict]) -> int:
+        """Store historical data points. Returns count of newly inserted records."""
+        inserted = 0
+        for point in data_points:
+            try:
+                ts = point["time"]
+                asset = point["asset"]
+                price = float(point["price"])
+
+                # Check if already exists
+                stmt = select(Price).where(
+                    Price.time == ts,
+                    Price.asset == asset,
+                )
+                existing = (await self.db.execute(stmt)).scalar_one_or_none()
+                if existing is not None:
+                    continue
+
+                record = Price(
+                    time=ts,
+                    asset=asset,
+                    price=price,
+                    source=point.get("source", "backfill"),
+                    change_24h=point.get("change_24h"),
+                    volume_24h=point.get("volume_24h"),
+                )
+                self.db.add(record)
+                inserted += 1
+            except Exception as exc:
+                logger.warning("history_store_error", error=str(exc))
+                continue
+
+        if inserted > 0:
+            try:
+                await self.db.commit()
+            except Exception as exc:
+                logger.error("history_commit_error", error=str(exc))
+                await self.db.rollback()
+                return 0
+
+        return inserted
+
     async def get_current_prices(self) -> list[Price]:
         """Return the latest price record for each asset."""
-        # Subquery: latest time per asset
         from sqlalchemy import func
 
         subq = (
