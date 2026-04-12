@@ -9,6 +9,7 @@ import PriceChart from "@/components/PriceChart";
 import FactorBreakdown from "@/components/FactorBreakdown";
 import AllocationPanel from "@/components/AllocationPanel";
 import SuggestionPanel from "@/components/SuggestionPanel";
+import RiskMethodology from "@/components/RiskMethodology";
 import {
   fetchCurrentPrices,
   fetchPriceHistory,
@@ -160,6 +161,9 @@ export default function DashboardPage() {
         ) : (
           <SkeletonPanel />
         )}
+
+        {/* Methodology */}
+        <RiskMethodology />
       </main>
     </div>
   );

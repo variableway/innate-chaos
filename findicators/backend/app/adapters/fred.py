@@ -66,8 +66,16 @@ class FredAdapter(BaseAdapter):
                 except (ValueError, TypeError):
                     continue
 
+                # Parse observation date into timezone-aware datetime
+                obs_date = obs.get("date", "")
+                try:
+                    obs_time = datetime.strptime(obs_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    continue
+
                 friendly_name = SERIES_MAP.get(series_id, series_id)
                 results.append({
+                    "time": obs_time,
                     "asset": friendly_name,
                     "price": price,
                     "source": "fred",

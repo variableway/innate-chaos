@@ -10,3 +10,6 @@
 [submodule "references/ai-trading-agent"]
 	path = references/ai-trading-agent
 	url = https://github.com/Gajesh2007/ai-trading-agent.git
+[submodule "references/briefing"]
+	path = references/briefing
+	url = https://github.com/star23/day1global-briefing.git

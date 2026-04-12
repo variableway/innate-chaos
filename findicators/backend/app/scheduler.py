@@ -1,6 +1,7 @@
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from app.adapters.coingecko import CoinGeckoAdapter
 from app.adapters.fred import FredAdapter
 from app.adapters.hyperliquid import HyperLiquidAdapter
 from app.adapters.yahoo_finance import YahooFinanceAdapter
@@ -15,24 +16,41 @@ scheduler = AsyncIOScheduler()
 
 
 async def _fetch_crypto() -> None:
-    """Job: fetch crypto prices (BTC, ETH, PAXG/GOLD) and store in DB."""
+    """Job: fetch crypto + gold prices from HyperLiquid, fallback to CoinGecko."""
     try:
         adapter = HyperLiquidAdapter()
         async with async_session() as db:
             service = PriceService(db, adapters=[adapter])
             await service.fetch_and_store()
+
+            # If no data from HyperLiquid, try CoinGecko fallback
+            prices = await service.get_current_prices()
+            crypto_assets = {p.asset for p in prices if p.asset in ("BTC", "ETH", "GOLD")}
+            if len(crypto_assets) < 2:
+                logger.info("trying_coingecko_fallback")
+                cg = CoinGeckoAdapter()
+                await service.fetch_and_store.__wrapped__(service) if hasattr(service.fetch_and_store, '__wrapped__') else None
+                # Re-fetch with CoinGecko
+                cg_data = await cg.fetch_latest()
+                if cg_data:
+                    await service.store_history(cg_data)
+
         logger.info("crypto_fetch_complete")
     except Exception as exc:
         logger.error("crypto_fetch_job_error", error=str(exc))
 
 
 async def _fetch_economic() -> None:
-    """Job: fetch economic data (OIL, rates) from Yahoo Finance and FRED, store in DB."""
+    """Job: fetch economic data from FRED + Yahoo Finance."""
     try:
-        adapters: list = [YahooFinanceAdapter()]
-        # Only add FRED if API key is configured
+        adapters = []
+
+        # FRED for rates (if key configured)
         if settings.fred_api_key and settings.fred_api_key != "your_fred_api_key_here":
             adapters.append(FredAdapter())
+
+        # Yahoo Finance for OIL + rates (fallback)
+        adapters.append(YahooFinanceAdapter())
 
         async with async_session() as db:
             service = PriceService(db, adapters=adapters)
@@ -67,7 +85,15 @@ async def _backfill_history() -> None:
                     count = await service.store_history(candles)
                     logger.info("backfill_hl", coin=coin, inserted=count)
 
-            # 2. Yahoo Finance history (OIL, rates)
+            # 2. CoinGecko history as fallback
+            cg = CoinGeckoAdapter()
+            for coin_id in ["bitcoin", "ethereum", "pax-gold"]:
+                history = await cg.fetch_history(coin_id, days=30)
+                if history:
+                    count = await service.store_history(history)
+                    logger.info("backfill_cg", coin=coin_id, inserted=count)
+
+            # 3. Yahoo Finance history (OIL, rates)
             yahoo = YahooFinanceAdapter()
             for symbol, friendly in YahooFinanceAdapter.SYMBOL_MAP.items():
                 history = await yahoo.fetch_history(symbol, friendly, days=30)
@@ -75,7 +101,7 @@ async def _backfill_history() -> None:
                     count = await service.store_history(history)
                     logger.info("backfill_yahoo", symbol=friendly, inserted=count)
 
-            # 3. FRED history (if key configured)
+            # 4. FRED history (if key configured)
             if settings.fred_api_key and settings.fred_api_key != "your_fred_api_key_here":
                 fred = FredAdapter()
                 for series_id, friendly in FredAdapter.SERIES_MAP.items():
